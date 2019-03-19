@@ -292,12 +292,26 @@ state."
   "Selectively perform DOTIMES or LPARALLEL:DOTIMES, depending on
 whether the number of iterations N exceeds the threshold set by
 *QUBITS-REQUIRED-FOR-PARALLELIZATION*."
-  (alexandria:once-only (n)      
-    `(if (> ,n (expt 2  *qubits-required-for-parallelization*))
-         (lparallel:pdotimes (,i ,n ,ret)
-           ,@body)
+  (alexandria:with-gensyms (num-parts last-part chunk-size last-chunk-size
+                                      part-idx part-start part-size part-end)
+    (alexandria:once-only (n)
+      `(if (> ,n (expt 2  *qubits-required-for-parallelization*))
+         (let* ((,num-parts (lparallel:kernel-worker-count))
+                (,last-part (1- ,num-parts))
+                (,chunk-size (floor n ,num-parts))
+                (,last-chunk-size (+ ,chunk-size (mod ,n ,chunk-size))))
+         (declare (type fixnum ,num-parts ,last-part ,chunk-size ,last-chunk-size))
+         (lparallel:pdotimes (,part-idx ,num-parts ,ret)
+           (let* ((,part-start (* ,part-idx ,part-size))
+                  (,part-size (if (= ,part-idx ,last-part) ,last-chunk-size ,chunk-size))
+                  (,part-end (+ ,part-start ,part-size))
+                  (,i ,part-start))
+             (declare (type fixnum ,part-start ,part-size ,part-end ,i))
+             (loop while (< ,i ,part-end)
+                   do ,@body
+                     (incf ,i)))))
          (dotimes (,i ,n ,ret)
-           ,@body))))
+           ,@body)))))
 
 
 (defmacro psum-dotimes ((i range) &body body)

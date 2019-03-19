@@ -38,12 +38,8 @@
   "Modify the quantum state V to be |...000>."
   (declare (type quantum-state v)
            #.*optimize-dangerously-fast*)
-  (if (< (wavefunction-qubits v) *qubits-required-for-parallelization*)
-      (dotimes (i (length v))
-        (setf (aref v i) (cflonum 0)))
-      (lparallel:pdotimes (i (length v))
-        (setf (aref v i) (cflonum 0))))
-
+  (pdotimes (i (length v))
+    (setf (aref v i) (cflonum 0)))
   (setf (aref v 0) (cflonum 1))
   v)
 
@@ -59,7 +55,7 @@
                         (make-lisp-cflonum-vector length) ; Allocate fresh vector.
                         destination)))
           (declare (type quantum-state copy))
-          (lparallel:pdotimes (i length copy)
+          (pdotimes (i length copy)
             (setf (aref copy i) (aref wf i))))
         (if (null destination)
             (copy-seq wf)
@@ -297,22 +293,14 @@ If the length/norm of WAVEFUNCTION is known, it can be passed as the LENGTH para
   (declare (type quantum-state wavefunction)
            (type (or null real) length)
            (inline norm))
-  ;; Mutate the wavefunction.
   (let ((num-qubits (wavefunction-qubits wavefunction))
         (inv-norm (if (null length)
                       (/ (norm wavefunction))
                       (/ (flonum length)))))
     (declare (type (flonum 0) inv-norm))
-
     ;; Normalize the wavefunction
-    (if (<= *qubits-required-for-parallelization* num-qubits)
-        (lparallel:pdotimes (i (length wavefunction))
-          (setf (aref wavefunction i) (* inv-norm (aref wavefunction i))))
-        (dotimes (i (length wavefunction))
-          (setf (aref wavefunction i) (* inv-norm (aref wavefunction i)))))
-
-    ;; Return the wavefunction.
-    wavefunction))
+    (pdotimes (i (length wavefunction) wavefunction)
+      (setf (aref wavefunction i) (* inv-norm (aref wavefunction i))))))
 
 (declaim (ftype (function (t) (simple-array flonum (*)))
                 cumulative-distribution-function))
